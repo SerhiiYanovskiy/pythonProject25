@@ -13,11 +13,6 @@ class DataEntry:
 
 
 TARGET_CSV_PATH = "payments_2022_05_18-13_28 (3).csv"
-JUMP_LEFT_SEQ = '\u001b[100D'
-
-
-results = []
-start = time.time()
 
 with open(TARGET_CSV_PATH) as csvfile:
     reader = csv.DictReader(csvfile)
@@ -26,8 +21,14 @@ with open(TARGET_CSV_PATH) as csvfile:
         rawValues = []
         for fieldname in reader.fieldnames:
             rawValues.append(row[fieldname])
-        dataEntries.append(DataEntry(rawValues, map(
-            lambda name: name.replace(' ', "_"), reader.fieldnames)))
+        dataEntries.append(
+            DataEntry(rawValues,
+                      map(
+                          lambda name: name.replace(' ', "_"),
+                          reader.fieldnames
+                      )
+                      )
+        )
 
     sources = {}
 
@@ -35,69 +36,64 @@ with open(TARGET_CSV_PATH) as csvfile:
         sources[item.Source] = {}
 
     for source in sources:
-        sourceEntries = list(filter(
-            lambda value: value.Source == source, dataEntries))
-        userEmails = list(set(map(lambda v: v.User_email, sourceEntries)))
-        successCount = 0
+        sourceEntries = list(
+            filter(
+                lambda value: value.Source == source,
+                dataEntries
+            )
+        )
+
+        successfulTransactions = list(
+            filter(
+                lambda value: value.Success == 'Yes', sourceEntries
+            )
+        )
+        succesesCount = len(successfulTransactions)
+
+        failsOrPendingCount = len(list(filter(
+            lambda value: value.Success != 'Yes', sourceEntries)))
+
+        successRate = str(
+            (float(succesesCount) / float(len(sourceEntries))) * 100)[0:5] + '%'
+
+        sourceResult = '\x1b[6;30;42m' + source + ':' + '\x1b[0m' + '\nTotal transactions: ' + \
+            str(len(sourceEntries)) + '\nTotal Success: ' + \
+            str(succesesCount) + \
+            '\n\x1b[0;33mSuccess Rate: ' + successRate + '\x1b[0m'
+
         currencies = set(map(lambda value: value.Currency, sourceEntries))
+
         currencyDepositSum = {}
+
         for currency in currencies:
             currencyDepositSum[currency] = 0.0
-        # print("                                            ")
-        for mail in userEmails:
-            successfulEntries = list(
-                filter(lambda e: e.User_email == mail and e.Success == 'Yes', sourceEntries))
 
-            successfulEntriesCount = len(successfulEntries)
+        for transaction in successfulTransactions:
+            tempValue = currencyDepositSum[transaction.Currency]
+            tempValue += float(transaction.Amount)
+            currencyDepositSum[transaction.Currency] = tempValue
 
-            if successfulEntriesCount > 0:
-                successCount += 1
+        moneyResult = '\n'
 
-            for transaction in successfulEntries:
-                tempValue = currencyDepositSum[transaction.Currency]
-                tempValue += float(transaction.Amount)
-                currencyDepositSum[transaction.Currency] = tempValue
-
-            percent = str((float(userEmails.index(mail)) /
-                          float(len(userEmails))) * 100)[0:5] + "%"
-            formattedPercent = "Processing %s: %s" % (source, percent)
-            print(JUMP_LEFT_SEQ, end='')
-            print(formattedPercent, end='')
-            sys.stdout.flush()
-
-        totalCount = len(userEmails)
-        successRate = str(
-            (float(successCount) / float(totalCount)) * 100)[0:5] + "%"
-
-        moneyResult = ''
         for item in currencyDepositSum:
             moneyResult += str(item) + ': ' + \
                 str(currencyDepositSum[item]) + '\n'
-        resultString = "\n\x1b[6;30;42m" + str(source) + "\x1b[0m" + "\nTotal unique users: " + \
-            str(totalCount) + "\nSuccess transactions: " + \
-            str(successCount) + "\n\x1b[0;33mSuccess Rate: " + \
-            str(successRate) + "\x1b[0m\n" + moneyResult
 
-        results.append(resultString)
+        sourceResult += moneyResult
 
-print(JUMP_LEFT_SEQ, end='')
-print("                                            ")
-reportPath = os.path.split(TARGET_CSV_PATH)[
-    0] + 'Report for ' + re.sub(r'\.\w+', '', os.path.split(TARGET_CSV_PATH)[1]) + '.txt'
-reportFile = open(reportPath, 'w')
-for result in results:
-    print(result)
 
-    strippedFromAttributes = re.sub(r'\[0;33m', '', result)
-    strippedFromAttributes = re.sub(r'\[0m', '', strippedFromAttributes)
-    strippedFromAttributes = re.sub(r'\[6;30;42m', '', strippedFromAttributes)
+    generalTransactionsCount = len(dataEntries)
 
-    reportFile.write(strippedFromAttributes + '\n')
 
-reportFile.close()
+    generalSuccessfulCount = len(list(
+        filter(
+            lambda v: v.Success == 'Yes',
+            dataEntries
+        )
+    ))
+    generalSuccessfulRate = str(
+        float(generalSuccessfulCount) / float(generalTransactionsCount) * 100)[0:5] + '%'
 
-print('👑')
 
-end = time.time()
-print("\nElapsed %s seconds" % (end - start))
+
 
